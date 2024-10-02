@@ -6,21 +6,21 @@ from alive_progress import alive_bar
 
 load_dotenv()
 
-DB_NAME = os.getenv('DB_NAME')
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_HOST = os.getenv('DB_HOST')
-DB_PORT = os.getenv('DB_PORT')
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
 
 conn = psycopg2.connect(dbname=DB_NAME, user=DB_USER, password=DB_PASSWORD, host=DB_HOST, port=DB_PORT)
 cur = conn.cursor()
+
 
 def insert_from_data(data):
     orphapacket = data["Orphapacket"]
 
     cur.execute("SELECT orphacode FROM orphanet.orphapackets WHERE orphacode = %s", (orphapacket["ORPHAcode"],))
     if cur.fetchone():
-        print(f"Skipping {orphapacket['ORPHAcode']} because it already exists in the DB")
         return
 
     print(f"Inserting {orphapacket['ORPHAcode']}")
@@ -195,12 +195,74 @@ def insert_from_data(data):
 
     conn.commit()
 
-with alive_bar(len(os.listdir("json"))) as bar:
+
+with alive_bar(len(os.listdir("json")), title="Importing Orphapackets") as bar:
     for filename in os.listdir("json"):
         if filename.endswith(".json"):
             with open("json/" + filename) as f:
                 data = json.load(f)
                 insert_from_data(data)
+                bar()
+
+
+def connect_parents(data):
+    orphapacket = data["Orphapacket"]
+    orphacode = orphapacket["ORPHAcode"]
+
+    if "Parents" not in orphapacket:
+        orphapacket["Parents"] = []
+
+    if type(orphapacket["Parents"]) is not list:
+        orphapacket["Parents"] = [orphapacket["Parents"]]
+
+    for parent in orphapacket.get("Parents", []):
+        if "Parent" in parent:
+            parent = parent["Parent"]
+
+        for parent_entry in parent:
+            parent_orphacode = parent_entry["ORPHAcode"]
+
+            cur.execute("SELECT orphacode FROM orphanet.orphapackets WHERE orphacode = %s", (parent_orphacode,))
+            if not cur.fetchone():
+                cur.execute(
+                    """
+                    INSERT INTO orphanet.orphapackets (orphacode, label)
+                    VALUES (%s, %s)
+                    """,
+                    (parent_orphacode, parent_entry["Label"]),
+                )
+
+            cur.execute(
+                """
+                INSERT INTO orphanet.parent_child (parent_orphacode, child_orphacode)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (parent_orphacode, orphacode),
+            )
+
+    if "Children" in orphapacket:
+        for child in orphapacket.get("Children", []):
+            for child_entry in child["Child"]:
+                child_orphacode = child_entry["ORPHAcode"]
+                cur.execute(
+                    """
+                    INSERT INTO orphanet.orphapackets_parents (parent_orphacode, child_orphacode)
+                    VALUES (%s, %s)
+                    ON CONFLICT DO NOTHING
+                    """,
+                    (orphacode, child_orphacode),
+                )
+
+    conn.commit()
+
+
+with alive_bar(len(os.listdir("json")), title="Connecting Orphapackets") as bar:
+    for filename in os.listdir("json"):
+        if filename.endswith(".json"):
+            with open("json/" + filename) as f:
+                data = json.load(f)
+                connect_parents(data)
                 bar()
 
 cur.close()

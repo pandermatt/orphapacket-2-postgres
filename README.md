@@ -7,6 +7,10 @@ This Python script imports Orphapacket data from JSON files into a PostgreSQL da
 - Inserts Orphapacket data, including genes, phenotypes, synonyms, text sections, average age of onset, type of inheritances, and prevalences.
 - Handles relationships between Orphapackets and external references.
 
+## Schema
+
+![Orphapacket Schema](schema.svg)
+
 ## Setup
 
 Clone this repository and navigate to the project directory.
