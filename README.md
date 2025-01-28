@@ -38,6 +38,14 @@ psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f orphapacket.sql
    
 2. Download the JSON files from the [Orphanet Orphapacket repository](https://github.com/Orphanet/orphapacket) and place them in a folder named `json` within the project directory.
 
+    ```bash
+    mkdir json
+    rm json/* # Remove any existing files in the json folder (if the folder already exists)
+    git clone git@github.com:Orphanet/orphapacket.git
+    mkdir json
+    cp orphapacket/json/* json/
+    ```
+
 3. Run the script to import data into the database:
 
     ```bash
